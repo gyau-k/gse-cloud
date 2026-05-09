@@ -1,0 +1,59 @@
+name: GSE Backfill
+
+on:
+  workflow_dispatch:
+    inputs:
+      start_date:
+        description: "Start date (YYYY-MM-DD)"
+        required: true
+      end_date:
+        description: "End date (YYYY-MM-DD)"
+        required: true
+
+jobs:
+  backfill:
+    name: Backfill Date Range
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run backfill
+        env:
+          DATABASE_URL:          ${{ secrets.DATABASE_URL }}
+          GSE_API_URL:           ${{ secrets.GSE_API_URL }}
+          AWS_ACCESS_KEY_ID:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION:            ${{ secrets.AWS_REGION }}
+          S3_BUCKET_NAME:        ${{ secrets.S3_BUCKET_NAME }}
+        run: |
+          python - <<'EOF'
+          import subprocess
+          from datetime import date, timedelta
+
+          start = date.fromisoformat("${{ github.event.inputs.start_date }}")
+          end   = date.fromisoformat("${{ github.event.inputs.end_date }}")
+
+          current = start
+          while current <= end:
+            # Skip weekends
+            if current.weekday() < 5:
+              print(f"\n>>> Fetching {current} ...")
+              subprocess.run(
+                ["python", "fetch_daily.py", "--date", str(current)],
+                check=True
+              )
+            current += timedelta(days=1)
+
+          print("\nBackfill complete.")
+          EOF

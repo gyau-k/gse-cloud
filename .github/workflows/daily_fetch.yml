@@ -1,0 +1,46 @@
+name: GSE Daily Fetch
+
+on:
+  schedule:
+    # 15:30 UTC Monday–Friday (GSE closes ~15:00 GMT)
+    - cron: "30 15 * * 1-5"
+  workflow_dispatch:
+    # Allow manual trigger from GitHub Actions tab
+    inputs:
+      date:
+        description: "Trade date (YYYY-MM-DD). Leave blank for today."
+        required: false
+        default: ""
+
+jobs:
+  fetch:
+    name: Fetch & Upsert GSE Data
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run fetch_daily.py
+        env:
+          DATABASE_URL:          ${{ secrets.DATABASE_URL }}
+          GSE_API_URL:           ${{ secrets.GSE_API_URL }}
+          AWS_ACCESS_KEY_ID:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION:            ${{ secrets.AWS_REGION }}
+          S3_BUCKET_NAME:        ${{ secrets.S3_BUCKET_NAME }}
+        run: |
+          if [ -n "${{ github.event.inputs.date }}" ]; then
+            python fetch_daily.py --date "${{ github.event.inputs.date }}"
+          else
+            python fetch_daily.py
+          fi
